@@ -41,7 +41,7 @@ class TypedCheckout {
           selectingDelivery(context.scheduleOnce(checkoutTimerDuration, context.self, ExpireCheckout))
 
         case _ => Behaviors.same
-      }
+    }
   )
 
   def selectingDelivery(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receiveMessage {
@@ -61,7 +61,7 @@ class TypedCheckout {
         case ExpireCheckout | CancelCheckout => cancelled
 
         case _ => Behaviors.same
-      }
+    }
   )
 
   def processingPayment(timer: Cancellable): Behavior[TypedCheckout.Command] = Behaviors.receiveMessage {

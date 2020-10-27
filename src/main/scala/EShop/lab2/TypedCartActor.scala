@@ -40,7 +40,7 @@ class TypedCartActor {
           nonEmpty(cart.addItem(item), scheduleTimer(context))
 
         case _ => Behaviors.same
-      }
+    }
   )
 
   def nonEmpty(cart: Cart, timer: Cancellable): Behavior[TypedCartActor.Command] = Behaviors.receive(
@@ -58,7 +58,7 @@ class TypedCartActor {
         case StartCheckout => inCheckout(cart)
 
         case _ => Behaviors.same
-      }
+    }
   )
 
   def inCheckout(cart: Cart): Behavior[TypedCartActor.Command] = Behaviors.receive(
@@ -69,7 +69,7 @@ class TypedCartActor {
         case ConfirmCheckoutCancelled => nonEmpty(cart, scheduleTimer(context))
 
         case _ => Behaviors.same
-      }
+    }
   )
 
 }
