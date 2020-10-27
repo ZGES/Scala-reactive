@@ -40,34 +40,24 @@ class Checkout extends Actor {
   val checkoutTimerDuration: FiniteDuration = 1 seconds
   val paymentTimerDuration: FiniteDuration = 1 seconds
 
-  private def checkoutTimer: Cancellable = context.system.scheduler.scheduleOnce(checkoutTimerDuration, self, ExpireCheckout)
-  private def paymentTimer: Cancellable = context.system.scheduler.scheduleOnce(paymentTimerDuration, self, ExpirePayment)
-
   def receive: Receive = LoggingReceive {
     case StartCheckout =>
-      context become selectingDelivery(checkoutTimer)
+      context become selectingDelivery(scheduler.scheduleOnce(checkoutTimerDuration, self, ExpireCheckout))
   }
 
   def selectingDelivery(timer: Cancellable): Receive = LoggingReceive {
-    case SelectDeliveryMethod(method) =>
-      sender ! SelectingDeliveryStarted(timer)
-      context become selectingPaymentMethod(checkoutTimer)
+    case SelectDeliveryMethod(_) =>
+      context become selectingPaymentMethod(timer)
 
-    case ExpireCheckout =>
-      context become cancelled
-
-    case CancelCheckout =>
+    case ExpireCheckout | CancelCheckout =>
       context become cancelled
   }
 
   def selectingPaymentMethod(timer: Cancellable): Receive = LoggingReceive {
-    case SelectPayment(payment) =>
-      context become processingPayment(paymentTimer)
+    case SelectPayment(_) =>
+      context become processingPayment(scheduler.scheduleOnce(paymentTimerDuration, self, ExpirePayment))
 
-    case ExpireCheckout =>
-      context become cancelled
-
-    case CancelCheckout =>
+    case ExpireCheckout | CancelCheckout =>
       context become cancelled
   }
 
@@ -75,17 +65,16 @@ class Checkout extends Actor {
     case ConfirmPaymentReceived =>
       context become closed
 
-    case ExpirePayment =>
+    case ExpirePayment | CancelCheckout =>
       context become cancelled
   }
 
   def cancelled: Receive = LoggingReceive {
-    case
+    case _ => context stop self
   }
 
   def closed: Receive = LoggingReceive{
-    case ConfirmPaymentReceived =>
-      context.parent ! ConfirmCheckoutClosed
+    case _ => context stop self
   }
 
 }
