@@ -2,7 +2,7 @@ package EShop.lab3
 
 import EShop.lab2.{CartActor, Checkout}
 import EShop.lab3.OrderManager._
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, Props}
 import akka.event.LoggingReceive
 
 object OrderManager {
@@ -23,19 +23,55 @@ object OrderManager {
 
 class OrderManager extends Actor {
 
-  override def receive = uninitialized
+  override def receive: Receive = uninitialized
 
-  def uninitialized: Receive = ???
+  def uninitialized: Receive = LoggingReceive {
+    case "init" =>
+      val cartActor = context.actorOf(Props[CartActor], "cartActor")
+      sender ! Done
+      context become open(cartActor)
+  }
 
-  def open(cartActor: ActorRef): Receive = ???
+  def open(cartActor: ActorRef): Receive = LoggingReceive {
+    case AddItem(id) =>
+      cartActor ! CartActor.AddItem(id)
+      sender ! Done
 
-  def inCheckout(cartActorRef: ActorRef, senderRef: ActorRef): Receive = ???
+    case RemoveItem(id) =>
+      cartActor ! CartActor.RemoveItem(id)
+      sender ! Done
 
-  def inCheckout(checkoutActorRef: ActorRef): Receive = ???
+    case Buy =>
+      cartActor ! CartActor.StartCheckout
+      context become inCheckout(cartActor, sender)
+  }
 
-  def inPayment(senderRef: ActorRef): Receive = ???
+  def inCheckout(cartActorRef: ActorRef, senderRef: ActorRef): Receive = LoggingReceive {
+    case ConfirmCheckoutStarted(checkoutRef) =>
+      senderRef ! Done
+      cartActorRef ! Done
+      context become inCheckout(checkoutRef)
+  }
 
-  def inPayment(paymentActorRef: ActorRef, senderRef: ActorRef): Receive = ???
+  def inCheckout(checkoutActorRef: ActorRef): Receive = LoggingReceive {
+    case SelectDeliveryAndPaymentMethod(delivery, payment) =>
+      checkoutActorRef ! Checkout.SelectDeliveryMethod(delivery)
+      checkoutActorRef ! Checkout.SelectPayment(payment)
+      context become inPayment(sender)
+  }
+
+  def inPayment(senderRef: ActorRef): Receive = LoggingReceive {
+    case ConfirmPaymentStarted(paymentRef) =>
+      context become inPayment(paymentRef, senderRef)
+  }
+
+  def inPayment(paymentActorRef: ActorRef, senderRef: ActorRef): Receive = LoggingReceive {
+    case Pay =>
+      paymentActorRef ! Payment.DoPayment
+    case ConfirmPaymentReceived =>
+      senderRef ! Done
+      context become finished
+  }
 
   def finished: Receive = {
     case _ => sender ! "order manager finished job"

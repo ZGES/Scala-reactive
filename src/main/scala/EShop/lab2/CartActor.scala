@@ -1,5 +1,6 @@
 package EShop.lab2
 
+import EShop.lab3.OrderManager
 import akka.actor.{Actor, ActorRef, Cancellable, Props}
 import akka.event.{Logging, LoggingReceive}
 
@@ -53,6 +54,8 @@ class CartActor extends Actor {
       context become empty
 
     case StartCheckout =>
+      val checkout = context.actorOf(Props[Checkout], name = "checkout")
+      sender ! OrderManager.ConfirmCheckoutStarted(checkout)
       context become inCheckout(cart)
   }
 
