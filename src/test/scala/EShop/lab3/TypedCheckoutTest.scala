@@ -9,10 +9,10 @@ import org.scalatest.matchers.should.Matchers
 
 class TypedCheckoutTest
   extends ScalaTestWithActorTestKit
-    with AnyFlatSpecLike
-    with BeforeAndAfterAll
-    with Matchers
-    with ScalaFutures {
+  with AnyFlatSpecLike
+  with BeforeAndAfterAll
+  with Matchers
+  with ScalaFutures {
 
   override def afterAll: Unit =
     testKit.shutdownTestKit()

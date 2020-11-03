@@ -9,10 +9,10 @@ import org.scalatest.matchers.should.Matchers
 
 class TypedCartTest
   extends ScalaTestWithActorTestKit
-    with AnyFlatSpecLike
-    with BeforeAndAfterAll
-    with Matchers
-    with ScalaFutures {
+  with AnyFlatSpecLike
+  with BeforeAndAfterAll
+  with Matchers
+  with ScalaFutures {
 
   override def afterAll: Unit =
     testKit.shutdownTestKit()
@@ -42,12 +42,12 @@ class TypedCartTest
   }
 
   it should "start checkout" in {
-    val probe     = testKit.createTestProbe[TypedOrderManager.Command]()
+    val probe     = testKit.createTestProbe[TypedCartActor.Event]()
     val cartActor = testKit.spawn(TypedCartActor())
 
     cartActor ! AddItem("orange")
     cartActor ! AddItem("banana")
     cartActor ! StartCheckout(probe.ref)
-    probe.expectMessageType[TypedOrderManager.ConfirmCheckoutStarted]
+    probe.expectMessageType[TypedCartActor.CheckoutStarted]
   }
 }

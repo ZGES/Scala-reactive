@@ -12,7 +12,7 @@ object TypedOrderManager {
   case class SelectDeliveryAndPaymentMethod(delivery: String, payment: String, sender: ActorRef[Ack]) extends Command
   case class Buy(sender: ActorRef[Ack])                                                               extends Command
   case class Pay(sender: ActorRef[Ack])                                                               extends Command
-  case class ConfirmCheckoutStarted(checkoutRef: ActorRef[TypedCheckout.Command])                     extends Command
+  case class WrappedCartActorResponse(response: TypedCartActor.Event)                                 extends Command
   case class ConfirmPaymentStarted(paymentRef: ActorRef[TypedPayment.Command])                        extends Command
   case object ConfirmPaymentReceived                                                                  extends Command
 
@@ -30,35 +30,40 @@ class TypedOrderManager {
     Behaviors.setup(context => open(context.spawn(TypedCartActor(), "cart")))
 
   def open(cartActor: ActorRef[TypedCartActor.Command]): Behavior[TypedOrderManager.Command] =
-    Behaviors.receive(
-      (context, msg) =>
-        msg match {
-          case AddItem(id, sender) =>
-            cartActor ! TypedCartActor.AddItem(id)
-            sender ! Done
-            Behaviors.same
+    Behaviors.receive { (context, msg) =>
+      val cartActorResponseMapper: ActorRef[TypedCartActor.Event] =
+        context.messageAdapter(response => WrappedCartActorResponse(response))
 
-          case RemoveItem(id, sender) =>
-            cartActor ! TypedCartActor.RemoveItem(id)
-            sender ! Done
-            Behaviors.same
+      msg match {
+        case AddItem(id, sender) =>
+          cartActor ! TypedCartActor.AddItem(id)
+          sender ! Done
+          Behaviors.same
 
-          case Buy(sender) =>
-            cartActor ! TypedCartActor.StartCheckout(context.self)
-            inCheckout(cartActor, sender)
+        case RemoveItem(id, sender) =>
+          cartActor ! TypedCartActor.RemoveItem(id)
+          sender ! Done
+          Behaviors.same
 
-          case _ => Behaviors.same
+        case Buy(sender) =>
+          cartActor ! TypedCartActor.StartCheckout(cartActorResponseMapper)
+          inCheckout(cartActor, sender)
+
+        case _ => Behaviors.same
       }
-    )
+    }
 
   def inCheckout(
     cartActorRef: ActorRef[TypedCartActor.Command],
     senderRef: ActorRef[Ack]
   ): Behavior[TypedOrderManager.Command] =
     Behaviors.receiveMessage {
-      case ConfirmCheckoutStarted(checkoutRef) =>
-        senderRef ! Done
-        inCheckout(checkoutRef)
+      case WrappedCartActorResponse(response) =>
+        response match {
+          case TypedCartActor.CheckoutStarted(checkoutRef) =>
+            senderRef ! Done
+            inCheckout(checkoutRef)
+        }
 
       case _ => Behaviors.same
     }
