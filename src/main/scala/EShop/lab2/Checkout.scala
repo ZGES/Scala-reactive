@@ -29,10 +29,12 @@ object Checkout {
   case object CheckOutClosed                   extends Event
   case class PaymentStarted(payment: ActorRef) extends Event
 
-  def props(cart: ActorRef): Props = Props(new Checkout())
+  def props(cart: ActorRef): Props = Props(new Checkout(cart))
 }
 
-class Checkout extends Actor {
+class Checkout(
+  cartActor: ActorRef
+) extends Actor {
 
   private val scheduler = context.system.scheduler
   private val log       = Logging(context.system, this)
@@ -55,7 +57,7 @@ class Checkout extends Actor {
 
   def selectingPaymentMethod(timer: Cancellable): Receive = LoggingReceive {
     case SelectPayment(method) =>
-      val payment = context.actorOf(Props(new Payment(method, sender, self)), name = "payment")
+      val payment = context.actorOf(Payment.props(method, sender, self), name = "payment")
       sender ! OrderManager.ConfirmPaymentStarted(payment)
       context become processingPayment(scheduler.scheduleOnce(paymentTimerDuration, self, ExpirePayment))
 
@@ -65,7 +67,6 @@ class Checkout extends Actor {
 
   def processingPayment(timer: Cancellable): Receive = LoggingReceive {
     case ConfirmPaymentReceived =>
-      context.parent ! CartActor.ConfirmCheckoutClosed
       context become closed
 
     case ExpirePayment | CancelCheckout =>
@@ -73,11 +74,15 @@ class Checkout extends Actor {
   }
 
   def cancelled: Receive = LoggingReceive {
-    case _ => context stop self
+    case _ =>
+      cartActor ! CartActor.ConfirmCheckoutClosed
+      context stop self
   }
 
   def closed: Receive = LoggingReceive {
-    case _ => context stop self
+    case _ =>
+      cartActor ! CartActor.ConfirmCheckoutClosed
+      context stop self
   }
 
 }

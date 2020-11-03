@@ -20,7 +20,7 @@ class Payment(
   checkout: ActorRef
 ) extends Actor {
 
-  override def receive: Receive = LoggingReceive{
+  override def receive: Receive = LoggingReceive {
     case DoPayment =>
       checkout ! Checkout.ConfirmPaymentReceived
       orderManager ! OrderManager.ConfirmPaymentReceived

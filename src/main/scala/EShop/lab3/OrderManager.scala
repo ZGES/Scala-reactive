@@ -25,12 +25,7 @@ class OrderManager extends Actor {
 
   override def receive: Receive = uninitialized
 
-  def uninitialized: Receive = LoggingReceive {
-    case "init" =>
-      val cartActor = context.actorOf(Props[CartActor], "cartActor")
-      sender ! Done
-      context become open(cartActor)
-  }
+  def uninitialized: Receive = open(context.actorOf(CartActor.props, "cart"))
 
   def open(cartActor: ActorRef): Receive = LoggingReceive {
     case AddItem(id) =>
@@ -49,7 +44,6 @@ class OrderManager extends Actor {
   def inCheckout(cartActorRef: ActorRef, senderRef: ActorRef): Receive = LoggingReceive {
     case ConfirmCheckoutStarted(checkoutRef) =>
       senderRef ! Done
-      cartActorRef ! Done
       context become inCheckout(checkoutRef)
   }
 
@@ -62,15 +56,18 @@ class OrderManager extends Actor {
 
   def inPayment(senderRef: ActorRef): Receive = LoggingReceive {
     case ConfirmPaymentStarted(paymentRef) =>
+      senderRef ! Done
       context become inPayment(paymentRef, senderRef)
+
+    case ConfirmPaymentReceived =>
+      senderRef ! Done
+      context become finished
   }
 
   def inPayment(paymentActorRef: ActorRef, senderRef: ActorRef): Receive = LoggingReceive {
     case Pay =>
       paymentActorRef ! Payment.DoPayment
-    case ConfirmPaymentReceived =>
-      senderRef ! Done
-      context become finished
+      context become inPayment(sender)
   }
 
   def finished: Receive = {

@@ -17,6 +17,7 @@ object CartActor {
   case object StartCheckout            extends Command
   case object ConfirmCheckoutCancelled extends Command
   case object ConfirmCheckoutClosed    extends Command
+  case object GetItems                 extends Command // command made to make testing easier
 
   sealed trait Event
   case class CheckoutStarted(checkoutRef: ActorRef) extends Event
@@ -39,6 +40,9 @@ class CartActor extends Actor {
     case AddItem(item) =>
       val cart = Cart.empty
       context become nonEmpty(cart.addItem(item), scheduleTimer)
+
+    case GetItems =>
+      sender ! Cart.empty
   }
 
   def nonEmpty(cart: Cart, timer: Cancellable): Receive = LoggingReceive {
@@ -50,11 +54,15 @@ class CartActor extends Actor {
       if (newCart.size == 0) context become empty
       else context become nonEmpty(newCart, scheduleTimer)
 
+    case GetItems =>
+      sender ! cart
+
     case ExpireCart =>
       context become empty
 
     case StartCheckout =>
-      val checkout = context.actorOf(Props[Checkout], name = "checkout")
+      val checkout = context.actorOf(Checkout props self, name = "checkout")
+      checkout ! Checkout.StartCheckout
       sender ! OrderManager.ConfirmCheckoutStarted(checkout)
       context become inCheckout(cart)
   }
@@ -65,6 +73,9 @@ class CartActor extends Actor {
 
     case ConfirmCheckoutClosed =>
       context become empty
+
+    case GetItems =>
+      sender ! cart
   }
 
 }
