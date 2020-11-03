@@ -23,14 +23,27 @@ class CartTest
 
   //use GetItems command which was added to make test easier
   it should "add item properly" in {
-    ???
+    val cartActor = TestActorRef(new CartActor)
+    cartActor ! AddItem("banana")
+    cartActor ! GetItems
+
+    val expectedCart = Cart.empty.addItem("banana")
+    expectMsg(expectedCart)
   }
 
   it should "be empty after adding and removing the same item" in {
-    ???
+    val cartActor = TestActorRef(new CartActor)
+    cartActor ! AddItem("orange")
+    cartActor ! RemoveItem("orange")
+    cartActor ! GetItems
+    expectMsg(Cart.empty)
   }
 
   it should "start checkout" in {
-    ???
+    val cartActor = TestActorRef(new CartActor)
+    cartActor ! AddItem("orange")
+    cartActor ! AddItem("banana")
+    cartActor ! StartCheckout
+    expectMsgType[OrderManager.ConfirmCheckoutStarted]
   }
 }

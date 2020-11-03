@@ -9,18 +9,24 @@ import org.scalatest.matchers.should.Matchers
 
 class TypedCheckoutTest
   extends ScalaTestWithActorTestKit
-  with AnyFlatSpecLike
-  with BeforeAndAfterAll
-  with Matchers
-  with ScalaFutures {
-
-  import TypedCheckout._
+    with AnyFlatSpecLike
+    with BeforeAndAfterAll
+    with Matchers
+    with ScalaFutures {
 
   override def afterAll: Unit =
     testKit.shutdownTestKit()
 
   it should "Send close confirmation to cart" in {
-    ???
-  }
+    val checkoutProbe = testKit.createTestProbe[TypedCartActor.Command]()
+    val orderProbe    = testKit.createTestProbe[TypedOrderManager.Command]()
+    val cartActor     = testKit.spawn(TypedCheckout(checkoutProbe.ref))
 
+    cartActor ! TypedCheckout.StartCheckout
+    cartActor ! TypedCheckout.SelectDeliveryMethod("post")
+    cartActor ! TypedCheckout.SelectPayment("cash", orderProbe.ref)
+    orderProbe.expectMessageType[TypedOrderManager.ConfirmPaymentStarted]
+    cartActor ! TypedCheckout.ConfirmPaymentReceived
+    checkoutProbe.expectMessage(TypedCartActor.ConfirmCheckoutClosed)
+  }
 }
