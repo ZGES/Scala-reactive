@@ -34,7 +34,7 @@ object TypedCheckout {
 }
 
 class TypedCheckout(
- cartActor: ActorRef[TypedCartActor.Command]
+  cartActor: ActorRef[TypedCartActor.Command]
 ) {
   import TypedCheckout._
 

@@ -48,7 +48,7 @@ class TypedOrderManager {
             inCheckout(cartActor, sender)
 
           case _ => Behaviors.same
-        }
+      }
     )
 
   def inCheckout(
@@ -73,7 +73,7 @@ class TypedOrderManager {
             inPayment(sender)
 
           case _ => Behaviors.same
-        }
+      }
     )
 
   def inPayment(senderRef: ActorRef[Ack]): Behavior[TypedOrderManager.Command] =
@@ -87,7 +87,7 @@ class TypedOrderManager {
         finished
 
       case _ => Behaviors.same
-  }
+    }
 
   def inPayment(
     paymentActorRef: ActorRef[TypedPayment.Command],
