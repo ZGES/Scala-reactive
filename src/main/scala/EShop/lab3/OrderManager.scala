@@ -2,7 +2,7 @@ package EShop.lab3
 
 import EShop.lab2.{CartActor, Checkout}
 import EShop.lab3.OrderManager._
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef}
 import akka.event.LoggingReceive
 
 object OrderManager {
