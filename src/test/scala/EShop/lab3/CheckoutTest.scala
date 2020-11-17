@@ -10,11 +10,11 @@ import org.scalatest.matchers.should.Matchers
 
 class CheckoutTest
   extends TestKit(ActorSystem("CheckoutTest"))
-    with AnyFlatSpecLike
-    with ImplicitSender
-    with BeforeAndAfterAll
-    with Matchers
-    with ScalaFutures {
+  with AnyFlatSpecLike
+  with ImplicitSender
+  with BeforeAndAfterAll
+  with Matchers
+  with ScalaFutures {
 
   override def afterAll: Unit =
     TestKit.shutdownActorSystem(system)

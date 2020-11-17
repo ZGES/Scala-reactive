@@ -28,59 +28,39 @@ class PersistentCheckout(
   private def updateState(event: Event, maybeTimer: Option[Cancellable] = None): Unit = {
     context.become(
       event match {
-        case CheckoutStarted                => selectingDelivery(maybeTimer.get)
-        case DeliveryMethodSelected(_)      => selectingPaymentMethod(maybeTimer.get)
-        case CheckOutClosed                 => closed
-        case CheckoutCancelled              => cancelled
-        case PaymentStarted(_)              => processingPayment(maybeTimer.get)
+        case CheckoutStarted => selectingDelivery(scheduler.scheduleOnce(timerDuration, self, ExpireCheckout))
+        case DeliveryMethodSelected(_) =>
+          selectingPaymentMethod(scheduler.scheduleOnce(timerDuration, self, ExpireCheckout))
+        case CheckOutClosed    => closed
+        case CheckoutCancelled => cancelled
+        case PaymentStarted(_) => processingPayment(scheduler.scheduleOnce(timerDuration, self, ExpirePayment))
 
       }
     )
   }
 
   def receiveCommand: Receive = LoggingReceive {
-    case StartCheckout =>
-      persist(CheckoutStarted) { event =>
-        updateState(event, Option(scheduler.scheduleOnce(timerDuration, self, ExpireCheckout)))
-      }
+    case StartCheckout => persist(CheckoutStarted)(updateState(_))
   }
 
   def selectingDelivery(timer: Cancellable): Receive = LoggingReceive {
-    case SelectDeliveryMethod(method) =>
-      persist(DeliveryMethodSelected(method)) { event =>
-        updateState(event, Option(timer))
-      }
+    case SelectDeliveryMethod(method) => persist(DeliveryMethodSelected(method))(updateState(_, Some(timer)))
 
-    case ExpireCheckout | CancelCheckout =>
-      persist(CheckoutCancelled) { event =>
-        updateState(event)
-      }
+    case ExpireCheckout | CancelCheckout => persist(CheckoutCancelled)(updateState(_))
   }
 
   def selectingPaymentMethod(timer: Cancellable): Receive = LoggingReceive {
-    case SelectPayment(method) =>
-      val payment = context.actorOf(Payment.props(method, sender, self), name = "payment")
-      persist(PaymentStarted(payment)) { event =>
-        sender ! OrderManager.ConfirmPaymentStarted(payment)
-        updateState(event, Option(scheduler.scheduleOnce(timerDuration, self, ExpirePayment)))
-      }
+    case SelectPayment(payment) =>
+      sender ! OrderManager.ConfirmPaymentStarted(context.actorOf(Payment.props(payment, sender, self), "payment"))
+      persist(PaymentStarted(self))(updateState(_, Some(timer)))
 
-    case ExpireCheckout | CancelCheckout =>
-      persist(CheckoutCancelled) { event =>
-        updateState(event)
-      }
+    case ExpireCheckout | CancelCheckout => persist(CheckoutCancelled)(updateState(_))
   }
 
   def processingPayment(timer: Cancellable): Receive = LoggingReceive {
-    case ConfirmPaymentReceived =>
-      persist(CheckOutClosed) { event =>
-        updateState(event)
-      }
+    case ConfirmPaymentReceived => persist(CheckOutClosed)(updateState(_))
 
-    case ExpireCheckout | CancelCheckout =>
-      persist(CheckoutCancelled) { event =>
-        updateState(event)
-      }
+    case ExpirePayment | ExpireCheckout | CancelCheckout => persist(CheckoutCancelled)(updateState(_))
   }
 
   def cancelled: Receive = LoggingReceive {
@@ -95,7 +75,7 @@ class PersistentCheckout(
       context stop self
   }
 
-  override def receiveRecover: Receive = {
-    case (evt: Event, timer: Option[Cancellable]) => updateState(evt, timer)
+  override def receiveRecover: Receive = LoggingReceive {
+    case event: Event => updateState(event)
   }
 }

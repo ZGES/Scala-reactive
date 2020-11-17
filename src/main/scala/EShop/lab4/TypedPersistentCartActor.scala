@@ -1,6 +1,6 @@
 package EShop.lab4
 
-import EShop.lab2.{Cart, TypedCheckout}
+import EShop.lab2.TypedCheckout
 import EShop.lab3.TypedOrderManager
 import akka.actor.Cancellable
 import akka.actor.typed.Behavior
@@ -31,30 +31,22 @@ class TypedPersistentCartActor {
   def commandHandler(context: ActorContext[Command]): (State, Command) => Effect[Event, State] = (state, command) => {
     state match {
       case Empty =>
-        command match{
-          case AddItem(item) =>
-            Effect.persist(ItemAdded(item))
-
-          case GetItems(sender) =>
-            sender ! Cart.empty
-            Effect.none
+        command match {
+          case AddItem(item) => Effect.persist(ItemAdded(item))
 
           case _ => Effect.none
         }
 
       case NonEmpty(cart, _) =>
-        command match{
+        command match {
           case RemoveItem(item) if cart.contains(item) =>
-            if (cart.size == 1) Effect.persist(CartEmptied)
+            val newCart = cart removeItem item
+            if (newCart.size == 0) Effect.persist(CartEmptied)
             else Effect.persist(ItemRemoved(item))
 
           case AddItem(item) => Effect.persist(ItemAdded(item))
 
           case ExpireCart => Effect.persist(CartExpired)
-
-          case GetItems(sender) =>
-            sender ! cart
-            Effect.none
 
           case StartCheckout(orderManagerRef) =>
             val checkout = context.spawn(TypedCheckout(context.self), "checkout")
@@ -66,11 +58,7 @@ class TypedPersistentCartActor {
         }
 
       case InCheckout(_) =>
-        command match{
-          case GetItems(sender) =>
-            sender ! state.cart
-            Effect.none
-
+        command match {
           case ConfirmCheckoutClosed => Effect.persist(CheckoutClosed)
 
           case ConfirmCheckoutCancelled => Effect.persist(CheckoutCancelled)
@@ -81,13 +69,14 @@ class TypedPersistentCartActor {
   }
 
   def eventHandler(context: ActorContext[Command]): (State, Event) => State = (state, event) => {
+    val cart = state.cart
     event match {
-      case CheckoutStarted(_)        => InCheckout(state.cart)
-      case ItemAdded(item)           => NonEmpty(state.cart.addItem(item), scheduleTimer(context))
-      case ItemRemoved(item)         => NonEmpty(state.cart.removeItem(item), scheduleTimer(context))
+      case CheckoutStarted(_)        => InCheckout(cart)
+      case ItemAdded(item)           => NonEmpty(cart.addItem(item), scheduleTimer(context))
+      case ItemRemoved(item)         => NonEmpty(cart.removeItem(item), scheduleTimer(context))
       case CartEmptied | CartExpired => Empty
       case CheckoutClosed            => Empty
-      case CheckoutCancelled         => NonEmpty(state.cart, scheduleTimer(context))
+      case CheckoutCancelled         => NonEmpty(cart, scheduleTimer(context))
     }
   }
 

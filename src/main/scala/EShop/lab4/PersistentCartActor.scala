@@ -30,73 +30,44 @@ class PersistentCartActor(
   private def updateState(event: Event, timer: Option[Cancellable] = None): Unit = {
     context.become(
       event match {
-        case CartExpired | CheckoutClosed       => empty
-        case CheckoutCancelled(cart)            => nonEmpty(cart, timer.get)
-        case ItemAdded(item, cart)              => nonEmpty(cart.addItem(item), timer.get)
-        case CartEmptied                        => empty
-        case ItemRemoved(item, cart)            => nonEmpty(cart.removeItem(item), timer.get)
-        case CheckoutStarted(_, cart)           => inCheckout(cart)
+        case CartExpired | CheckoutClosed => empty
+        case CheckoutCancelled(cart)      => nonEmpty(cart, scheduleTimer)
+        case ItemAdded(item, cart)        => nonEmpty(cart.addItem(item), scheduleTimer)
+        case CartEmptied                  => empty
+        case ItemRemoved(item, cart)      => nonEmpty(cart.removeItem(item), scheduleTimer)
+        case CheckoutStarted(_, cart)     => inCheckout(cart)
       }
     )
   }
 
   def empty: Receive = LoggingReceive {
-    case AddItem(item) =>
-      persist(ItemAdded(item, Cart.empty)) { event =>
-        updateState(event, Option(scheduleTimer))
-      }
-
-    case GetItems =>
-      sender ! Cart.empty
+    case AddItem(item) => persist(ItemAdded(item, Cart.empty))(updateState(_))
   }
 
   def nonEmpty(cart: Cart, timer: Cancellable): Receive = LoggingReceive {
-    case AddItem(item) =>
-      persist(ItemAdded(item, cart)) { event =>
-        updateState(event, Option(scheduleTimer))
-      }
+    case AddItem(item) => persist(ItemAdded(item, cart))(updateState(_))
 
     case RemoveItem(item) if cart contains item =>
-      if (cart.size == 1) persist(CartEmptied) { event =>
-        updateState(event)
-      }
-      else persist(ItemRemoved(item, cart)) { event =>
-        updateState(event, Option(scheduleTimer))
-      }
+      val newCart = cart removeItem item
+      if (newCart.size == 0) persist(CartEmptied)(updateState(_))
+      else persist(ItemRemoved(item, cart))(updateState(_))
 
-    case GetItems =>
-      sender ! cart
-
-    case ExpireCart =>
-      persist(CartExpired) { event =>
-        updateState(event)
-      }
+    case ExpireCart => persist(CartExpired)(updateState(_))
 
     case StartCheckout =>
       val checkout = context.actorOf(Checkout props self, name = "checkout")
-      persist(CheckoutStarted(checkout, cart)) { event =>
-        checkout ! Checkout.StartCheckout
-        sender ! OrderManager.ConfirmCheckoutStarted(checkout)
-        updateState(event)
-      }
+      checkout ! Checkout.StartCheckout
+      sender ! OrderManager.ConfirmCheckoutStarted(checkout)
+      persist(CheckoutStarted(checkout, cart))(updateState(_))
   }
 
   def inCheckout(cart: Cart): Receive = LoggingReceive {
-    case ConfirmCheckoutCancelled =>
-      persist(CheckoutCancelled(cart)) { event =>
-        updateState(event, Option(scheduleTimer))
-      }
+    case ConfirmCheckoutCancelled => persist(CheckoutCancelled(cart))(updateState(_))
 
-    case ConfirmCheckoutClosed =>
-      persist(CheckoutClosed) { event =>
-        updateState(event)
-      }
-
-    case GetItems =>
-      sender ! cart
+    case ConfirmCheckoutClosed => persist(CheckoutClosed)(updateState(_))
   }
 
   override def receiveRecover: Receive = {
-    case (evt: Event, timer: Option[Cancellable]) => updateState(evt, timer)
+    case event: Event => updateState(event)
   }
 }

@@ -33,13 +33,14 @@ class PersistentCheckoutTest
 
   it should "be in cancelled state after cancel message received in selectingDelivery State" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
     expectMsg(selectingDeliveryMsg)
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! CancelCheckout
     expectMsg(cancelledMsg)
   }
@@ -62,20 +63,21 @@ class PersistentCheckoutTest
 
   it should "be in selectingPayment state after delivery method selected" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
     expectMsg(selectingDeliveryMsg)
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! SelectDeliveryMethod(deliveryMethod)
     expectMsg(selectingPaymentMethodMsg)
   }
 
   it should "be in cancelled state after cancel message received in selectingPayment State" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
@@ -83,7 +85,8 @@ class PersistentCheckoutTest
     checkoutActor ! SelectDeliveryMethod(deliveryMethod)
     expectMsg(selectingPaymentMethodMsg)
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! CancelCheckout
     expectMsg(cancelledMsg)
   }
@@ -107,7 +110,7 @@ class PersistentCheckoutTest
 
   it should "be in processingPayment state after payment selected" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
@@ -115,7 +118,8 @@ class PersistentCheckoutTest
     checkoutActor ! SelectDeliveryMethod(deliveryMethod)
     expectMsg(selectingPaymentMethodMsg)
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! SelectPayment(paymentMethod)
     fishForMessage() {
       case m: String if m == processingPaymentMsg => true
@@ -125,7 +129,7 @@ class PersistentCheckoutTest
 
   it should "be in cancelled state after cancel message received in processingPayment State" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
@@ -138,7 +142,8 @@ class PersistentCheckoutTest
       case _: OrderManager.ConfirmPaymentStarted  => false
     }
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! CancelCheckout
     expectMsg(cancelledMsg)
   }
@@ -166,7 +171,7 @@ class PersistentCheckoutTest
 
   it should "be in closed state after payment completed" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
@@ -179,14 +184,15 @@ class PersistentCheckoutTest
       case _: OrderManager.ConfirmPaymentStarted  => false
     }
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! ConfirmPaymentReceived
     expectMsg(closedMsg)
   }
 
   it should "not change state after cancel msg in completed state" in {
     val cartActor     = TestProbe().ref
-    val id            = ???
+    val id            = generatePersistenceId
     val checkoutActor = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
 
     checkoutActor ! StartCheckout
@@ -201,7 +207,8 @@ class PersistentCheckoutTest
     checkoutActor ! ConfirmPaymentReceived
     expectMsg(closedMsg)
     //restart actor
-    val checkoutActorAfterRestart: ActorRef = ???
+    checkoutActor ! PoisonPill
+    val checkoutActorAfterRestart: ActorRef = checkoutActorWithResponseOnStateChange(system)(cartActor, id)
     checkoutActorAfterRestart ! CancelCheckout
     expectNoMessage()
   }
@@ -217,14 +224,14 @@ object PersistentCheckoutTest {
   val cancelledMsg              = "cancelled"
   val closedMsg                 = "closed"
 
-  def generatePersistenceId = Random.alphanumeric.take(256).mkString
+  def generatePersistenceId: String = Random.alphanumeric.take(256).mkString
 
   def checkoutActorWithResponseOnStateChange(
     system: ActorSystem
-  )(cartActor: ActorRef, persistenceId: String = generatePersistenceId) =
+  )(cartActor: ActorRef, persistenceId: String = generatePersistenceId): ActorRef =
     system.actorOf(Props(new PersistentCheckout(cartActor, persistenceId) {
 
-      override def receive() = {
+      override def receive(): Receive = {
         val result = super.receive
         sender ! emptyMsg
         result
