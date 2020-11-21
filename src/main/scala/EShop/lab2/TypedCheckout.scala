@@ -11,6 +11,11 @@ import scala.concurrent.duration._
 
 object TypedCheckout {
 
+  sealed trait Data
+  case object Uninitialized                               extends Data
+  case class SelectingDeliveryStarted(timer: Cancellable) extends Data
+  case class ProcessingPaymentStarted(timer: Cancellable) extends Data
+
   sealed trait Command
   case object StartCheckout                                                                       extends Command
   case class SelectDeliveryMethod(method: String)                                                 extends Command

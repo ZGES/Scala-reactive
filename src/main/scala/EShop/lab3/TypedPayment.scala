@@ -9,6 +9,9 @@ object TypedPayment {
   sealed trait Command
   case object DoPayment extends Command
 
+  sealed trait Event
+  case object PaymentConfirmed extends Event
+
   def apply(
     method: String,
     orderManager: ActorRef[TypedOrderManager.Command],
