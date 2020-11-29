@@ -2,62 +2,66 @@ package EShop.lab5
 
 import java.net.URI
 
-import EShop.lab5.ProductCatalog.Items
-import akka.actor.ActorSystem
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import EShop.lab5.ProductCatalog.{GetItems, Item, Items}
 import akka.http.scaladsl.server.{HttpApp, Route}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+
+import scala.concurrent.duration._
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
 import akka.util.Timeout
+import spray.json.{DefaultJsonProtocol, JsArray, JsString, JsValue, JsonFormat, enrichAny}
+import scala.concurrent.Await
 
-import scala.concurrent._
-import spray.json.{DefaultJsonProtocol, JsString, JsValue, JsonFormat}
-
-import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 
-trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val itemsFormat = new JF[ProductCatalog.Items] {
-    override def write(obj: Items): JsValue = JsString(obj.toString)
 
-    override def read(json: JsValue): Items = json match{
-      case JsString(item) => new Items(List[item])
+trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+
+  implicit val uriFormat: JsonFormat[URI] = new JsonFormat[java.net.URI] {
+    override def write(uri: java.net.URI): spray.json.JsValue = JsString(uri.toString)
+    override def read(json: JsValue): URI = json match {
+      case JsString(url) => new URI(url)
+      case _             => throw new RuntimeException("Parse exception")
     }
   }
 
-  implicit val uriFormat = new JsonFormat[java.net.URI] {
-    override def write(obj: java.net.URI): spray.json.JsValue = JsString(obj.toString)
-    override def read(json: JsValue): URI = json match {
-      case JsString(url) => new URI(url)
-      case _             => throw new RuntimeException("Parsing exception")
-    }
+  implicit val itemFormat: JsonFormat[Item] = jsonFormat5(Item)
+
+  implicit val itemsFormat: JsonFormat[Items] = new JF[Items] {
+    override def read(json: JsValue): Items = Items(json.convertTo[List[Item]])
+
+    override def write(items: Items): JsValue = JsArray(items.items.map(_.toJson).toVector)
   }
 
 }
 
-object ProductCatalogServerApp extends App {
-  new ProductCatalogServer().startServer("localhost", 8080)
+object ProductCatalogServer extends App {
+  new ProductCatalogServer().startServer("localhost", 9000)
 }
 
 class ProductCatalogServer extends HttpApp with JsonSupport {
 
-  implicit val system: ActorSystem                = ActorSystem("ProductCatalogServerSystem")
-  implicit val materializer: ActorMaterializer    = ActorMaterializer()
-  implicit val executionContext: ExecutionContext = system.dispatcher
-
   override protected def routes: Route = {
-    path("search") {
-      get {
-        parameters('brand.as[String], 'productKeyWords.repeated) { (brand, productKeyWords) =>
-          complete{
-            val productCatalogRef = system.actorSelection("akka.tcp://ProductCatalog@127.0.0.1:2554/user/productcatalog")
-            implicit val timeout: Timeout = Timeout(5 seconds)
-            val items = (productCatalogRef ? ProductCatalog.GetItems(brand, productKeyWords.toList)).mapTo[ProductCatalog.Items]
+    path("/") {
+      parameter('brand.as[String], 'productKeyWords.repeated) { (brand, productKeyWords) =>
+        get {
+          extractExecutionContext{implicit executionContext =>
+            extractActorSystem { actorSystem =>
+              val productCatalog = actorSystem.actorSelection("akka.tcp://ProductCatalog@127.0.0.1:2554/user/productcatalog")
+              implicit val timeout: Timeout = Timeout(5 seconds)
+              val future = productCatalog ? GetItems(brand, productKeyWords.toSeq.toList)
 
-            items.toString
+              val result = Await.result(future.mapTo[Items], timeout.duration)
+
+              complete {
+                  result.toJson
+              }
+            }
           }
+
         }
       }
     }
   }
+
 }
