@@ -1,6 +1,6 @@
 package PaymentServiceServer
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Terminated}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
@@ -16,7 +16,7 @@ class PaymentServiceServer extends PaymentRoutes {
   implicit val executionContext: ExecutionContext = system.dispatcher
   lazy val routes: Route                          = userRoutes
 
-  def run() = {
+  def run(): Terminated = {
     val serverBinding: Future[Http.ServerBinding] = Http().bindAndHandle(routes, "localhost", 8080)
 
     serverBinding.onComplete {
