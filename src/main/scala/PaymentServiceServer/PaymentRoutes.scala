@@ -14,7 +14,7 @@ trait PaymentRoutes {
 
   implicit def system: ActorSystem
 
-  implicit lazy val timeout = Timeout(5.seconds)
+  implicit lazy val timeout: Timeout = Timeout(5.seconds)
 
   var counter = 0
 
